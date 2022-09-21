@@ -20,7 +20,7 @@ pub fn record(mut port: Box<dyn SerialPort>) -> anyhow::Result<()> {
     loop {
         let r = port.read(buf.as_mut_slice())?;
         parser.feed(&buf[..r])?;
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        std::thread::sleep(std::time::Duration::from_millis(1000));
     }
 }
 
