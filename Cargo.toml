@@ -1,7 +1,7 @@
 [package]
 name = "vedirect"
-version = "0.2.0"
-edition = "2018"
+version = "0.3.0"
+edition = "2021"
 
 license = "Unlicense"
 description = "Library to parse the Victron Energy VE.Direct protocol and map the data to useful structs with clear units"

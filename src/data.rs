@@ -145,8 +145,8 @@ pub struct MPPT {
     pub panel_voltage: Volt,
     pub panel_power: Watt,
     pub battery_current: Ampere,
-    pub load_current: Ampere,
-    pub load_output_state: bool,
+    pub load_current: Option<Ampere>,
+    pub load_output_state: Option<bool>,
     pub relay_state: Option<bool>,
     pub off_reason: OffReason,
     pub yield_total: KiloWattHours,
@@ -169,14 +169,10 @@ impl VEDirectData for MPPT {
             channel1_voltage: convert_volt(fields, "V", 1000.0)?,
             panel_voltage: convert_volt(fields, "VPV", 1000.0)?,
             panel_power: convert_watt(fields, "PPV")?,
-            battery_current: convert_ampere(fields, "I", 1000.0)?,
-            load_current: convert_ampere(fields, "IL", 1000.0)?,
-            load_output_state: convert_bool(fields, "LOAD")?,
-            relay_state: if fields.contains_key("Relay") {
-                Some(convert_bool(fields, "Relay")?)
-            } else {
-                None
-            },
+            battery_current: fields.get("I").map(|v| convert_ampere(v, 1000.0)).map_or(Err(VEError::MissingField("I".into())), |v| v)?,
+            load_current: fields.get("IL").map(|v| convert_ampere(v, 1000.0)).map_or(Ok(None), |v| v.map(Some))?,
+            load_output_state: fields.get("LOAD").map(convert_bool).map_or(Ok(None), |v| v.map(Some))?,
+            relay_state: fields.get("Relay").map(convert_bool ).map_or(Ok(None), |v| v.map(Some))?,
             off_reason: convert_off_reason(fields, "OR")?,
             yield_total: convert_watt(fields, "H19")?,
             yield_today: convert_watt(fields, "H20")?,
@@ -238,15 +234,11 @@ fn convert_volt(
 }
 
 fn convert_ampere(
-    rawkeys: &HashMap<String, Vec<u8>>,
-    label: &str,
+    raw: &Vec<u8>,
     factor: f32,
 ) -> Result<Ampere, VEError> {
-    let raw = (*rawkeys)
-        .get(label)
-        .ok_or_else(|| VEError::MissingField(label.into()))?;
     let cleaned = from_utf8(raw)
-        .map_err(|e| VEError::Parse(format!("Failed to parse {} from {:?} - {}", label, &raw, e)))?
+        .map_err(|e| VEError::Parse(format!("Failed to parse {:?} - {}", &raw, e)))?
         .parse::<Ampere>()?
         / factor;
     Ok(cleaned)
@@ -280,12 +272,9 @@ fn convert_string(rawkeys: &HashMap<String, Vec<u8>>, label: &str) -> Result<Str
         .map_err(|e| VEError::Parse(format!("Failed to parse {} from {:?} - {}", label, &raw, e)))
 }
 
-fn convert_bool(rawkeys: &HashMap<String, Vec<u8>>, label: &str) -> Result<bool, VEError> {
-    let raw = &*rawkeys
-        .get(label)
-        .ok_or_else(|| VEError::MissingField(label.into()))?;
+fn convert_bool(raw: &Vec<u8>) -> Result<bool, VEError> {
     let s = from_utf8(raw).map_err(|e| {
-        VEError::Parse(format!("Failed to parse {} from {:?} - {}", label, &raw, e))
+        VEError::Parse(format!("Failed to parse {:?} as bool - {}", &raw, e))
     })?;
     if s == "ON" {
         Ok(true)
@@ -319,6 +308,7 @@ fn convert_error_code(
     Ok(ErrorCode::from_repr(cleaned).unwrap_or(ErrorCode::NoError))
 }
 
+// TODO These seem to be incorrect according to the docs, but return the correct info?
 fn convert_off_reason(
     rawkeys: &HashMap<String, Vec<u8>>,
     label: &str,
@@ -331,10 +321,10 @@ fn convert_off_reason(
     })?;
     match cleaned {
         "0x00000000" => Ok(OffReason::None),
-        "0x00000001" => Ok(OffReason::NoInputPower),
-        "0x00000002" => Ok(OffReason::SwitchedOffPowerSwitch),
-        "0x00000004" => Ok(OffReason::SwitchedOffDMR),
-        "0x00000008" => Ok(OffReason::RemoteInput),
+        "0x00000001" | "0x01000000" => Ok(OffReason::NoInputPower),
+        "0x00000002" | "0x02000000" => Ok(OffReason::SwitchedOffPowerSwitch),
+        "0x00000004" | "0x04000000" => Ok(OffReason::SwitchedOffDMR),
+        "0x00000008" | "0x08000000" => Ok(OffReason::RemoteInput),
         "0x00000010" => Ok(OffReason::ProtectionActive),
         "0x00000020" => Ok(OffReason::Paygo),
         "0x00000040" => Ok(OffReason::BMS),
