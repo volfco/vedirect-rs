@@ -4,6 +4,9 @@ use strum_macros::FromRepr;
 
 use crate::VEError;
 
+#[cfg(feature = "derive")]
+use serde::{Deserialize, Serialize};
+
 // Data types
 type Watt = i32;
 type Percent = f32;
@@ -25,6 +28,7 @@ impl From<std::num::ParseFloatError> for VEError {
     }
 }
 
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(FromRepr, PartialEq, Eq, Debug)]
 pub enum OffReason {
     None = 0x0,
@@ -39,6 +43,7 @@ pub enum OffReason {
     AnalysingInputVoltage = 0x000000100,
 }
 
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(FromRepr, PartialEq, Eq, Debug)]
 pub enum TrackerOperationMode {
     Off = 0,
@@ -46,6 +51,7 @@ pub enum TrackerOperationMode {
     MPPTrackerActive = 2,
 }
 
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(FromRepr, PartialEq, Eq, Debug)]
 pub enum ErrorCode {
     NoError = 0,
@@ -70,6 +76,7 @@ pub enum ErrorCode {
     UserSettingsInvalid = 119,
 }
 
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(FromRepr, PartialEq, Eq, Debug)]
 pub enum StateOfOperation {
     Off = 0,
@@ -99,6 +106,7 @@ pub trait VEDirectData {
 // struct Bmv600 {}
 
 /// Data for BMV 700 battery monitor series
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct Bmv700 {
     /// Main (channel 1) battery voltage. Labelled `V`
@@ -138,7 +146,10 @@ impl VEDirectData for Bmv700 {
     }
 }
 
+// struct Bmv71x { }
+
 /// Data for all MPPT solar charge controller
+#[cfg_attr(feature = "derive", derive(Serialize, Deserialize))]
 #[derive(Debug)]
 pub struct MPPT {
     pub channel1_voltage: Volt,
@@ -165,14 +176,31 @@ pub struct MPPT {
 
 impl VEDirectData for MPPT {
     fn fill(fields: &HashMap<String, Vec<u8>>) -> Result<Self, VEError> {
+        //
+        // for field in fields {
+        //     println!("debug: {} - {:?}", field.0, String::from_utf8(field.1.clone()));
+        // }
+
         Ok(MPPT {
             channel1_voltage: convert_volt(fields, "V", 1000.0)?,
             panel_voltage: convert_volt(fields, "VPV", 1000.0)?,
             panel_power: convert_watt(fields, "PPV")?,
-            battery_current: fields.get("I").map(|v| convert_ampere(v, 1000.0)).map_or(Err(VEError::MissingField("I".into())), |v| v)?,
-            load_current: fields.get("IL").map(|v| convert_ampere(v, 1000.0)).map_or(Ok(None), |v| v.map(Some))?,
-            load_output_state: fields.get("LOAD").map(convert_bool).map_or(Ok(None), |v| v.map(Some))?,
-            relay_state: fields.get("Relay").map(convert_bool ).map_or(Ok(None), |v| v.map(Some))?,
+            battery_current: fields
+                .get("I")
+                .map(|v| convert_ampere(v, 1000.0))
+                .map_or(Err(VEError::MissingField("I".into())), |v| v)?,
+            load_current: fields
+                .get("IL")
+                .map(|v| convert_ampere(v, 1000.0))
+                .map_or(Ok(None), |v| v.map(Some))?,
+            load_output_state: fields
+                .get("LOAD")
+                .map(convert_bool)
+                .map_or(Ok(None), |v| v.map(Some))?,
+            relay_state: fields
+                .get("Relay")
+                .map(convert_bool)
+                .map_or(Ok(None), |v| v.map(Some))?,
             off_reason: convert_off_reason(fields, "OR")?,
             yield_total: convert_watt(fields, "H19")?,
             yield_today: convert_watt(fields, "H20")?,
@@ -195,9 +223,6 @@ impl VEDirectData for MPPT {
 
 /// Data for Phoenix Chargers
 // struct PhoenixCharger {}
-
-/// Data for all devices
-// pub struct Everything {}
 
 /// "When the BMV is not synchronised, these statistics have no meaning, so "---" will be sent instead of a value"
 fn convert_percentage(
@@ -233,10 +258,7 @@ fn convert_volt(
     Ok(cleaned)
 }
 
-fn convert_ampere(
-    raw: &Vec<u8>,
-    factor: f32,
-) -> Result<Ampere, VEError> {
+fn convert_ampere(raw: &Vec<u8>, factor: f32) -> Result<Ampere, VEError> {
     let cleaned = from_utf8(raw)
         .map_err(|e| VEError::Parse(format!("Failed to parse {:?} - {}", &raw, e)))?
         .parse::<Ampere>()?
@@ -273,9 +295,8 @@ fn convert_string(rawkeys: &HashMap<String, Vec<u8>>, label: &str) -> Result<Str
 }
 
 fn convert_bool(raw: &Vec<u8>) -> Result<bool, VEError> {
-    let s = from_utf8(raw).map_err(|e| {
-        VEError::Parse(format!("Failed to parse {:?} as bool - {}", &raw, e))
-    })?;
+    let s = from_utf8(raw)
+        .map_err(|e| VEError::Parse(format!("Failed to parse {:?} as bool - {}", &raw, e)))?;
     if s == "ON" {
         Ok(true)
     } else if s == "OFF" {

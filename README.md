@@ -14,21 +14,23 @@ Can be used in conjuction with the `serial` library to pull battery status infor
 
 ## Details
 
-Developed using a VE.Direct to USB interface cable to a BMV 700. Should work identically with any other connection method to the device (such as the VE.Direct to serial adapters)
+Developed using a VE.Direct to USB interface cable. Based of the `VE.Direct-Protocol-3.32.pdf`.
 
-Cross compiled to use on a Raspberry Pi Zero W.
+The following Device Status Messages are implemented to spec:
 
-Based of the `VE.Direct-Protocol-3.27.pdf`.
+* MPPT
 
 Currently only implements the "Text-mode" (read only) interface,
 
 > The VE.Direct interface includes two modes: Text-mode and the HEX-mode. The purpose of the Text-mode is to make retrieving information extremely simple. The product will periodically transmit all run-time fields. The HEX-mode allows not only to read data but also write data, for example, change settings.
 
+**Note** If you are manually reading data off the Serial Port, as the given example demonstrates, data is written in 1 second intervals. If you read the buffer quicker or slower than this, you will either get incomplete or multiple sets of data.
+
 ## Testing
 
 The project has tests which can be run by usual `cargo test`
 
-Additionally there is a basic fuzzing setup for the parser which can be run easily using [`cargo-afl`](https://crates.io/crates/afl) - see `fuzz-target/run-fuzzer.sh`
+Additionally, there is a basic fuzzing setup for the parser which can be run easily using [`cargo-afl`](https://crates.io/crates/afl) - see `fuzz-target/run-fuzzer.sh`
 
 ## Status
 
